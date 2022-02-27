@@ -1,19 +1,14 @@
 import * as AWS from "aws-sdk";
+import winston = require("winston");
 
 export interface RDSSuspenderProps {
   rdsClient: AWS.RDS;
 }
 
-export class RDSSuspender {
-  public readonly rdsClient;
-  constructor(props: RDSSuspenderProps) {
-    this.rdsClient = props.rdsClient;
-  }
-
-  public requestClusterStop = async (clusterId: string)  => {
-    try {
-      const activeConnectionsResult = await new AWS.RDS().describeDBClusters
-    }
+export class RDSAdapter {
+  private logger: winston.Logger;
+  constructor(logger: winston.Logger) {
+    this.logger = logger;
   }
 
   public stopCluster = async (cluserId: string) => {
@@ -21,9 +16,11 @@ export class RDSSuspender {
       const res = await new AWS.RDS()
         .stopDBCluster({ DBClusterIdentifier: cluserId })
         .promise();
+      this.logger.info(`Successfully issued stop for ${cluserId}`);
       return true;
     } catch (e) {
-      return false;
+      this.logger.error(e);
+      throw e;
     }
   };
 
@@ -32,9 +29,11 @@ export class RDSSuspender {
       const res = await new AWS.RDS()
         .startDBCluster({ DBClusterIdentifier: cluserId })
         .promise();
+      this.logger.info(`Successfully issued start for ${cluserId}`);
       return true;
     } catch (e) {
-      return false;
+      this.logger.error(e);
+      throw e;
     }
   };
 }

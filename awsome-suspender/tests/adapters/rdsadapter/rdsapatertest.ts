@@ -4,7 +4,8 @@ import * as sinon from "sinon";
 import * as sinonChai from "sinon-chai";
 import * as chai from "chai";
 import * as chaiAsPromised from "chai-as-promised";
-import { RDSSuspender } from "../../../src-ts/services/rdssuspender";
+import { RDSAdapter } from "../../../src-ts/adapters/rdsadapter";
+import * as test_vars from "../../test_vars";
 
 chai.should();
 
@@ -12,14 +13,11 @@ chai.use(sinonChai);
 
 var expect = chai.expect; // we are using the "expect" style of Chai
 const sandbox = sinon.createSandbox();
-const TEST_RDS_CLUSTER_ID = "xlol";
 
 AWSMock.setSDKInstance(AWS);
 const mockedRDS = new AWS.RDS();
 
-let rdsSuspenderUnderTest = sandbox.spy(
-  new RDSSuspender({ rdsClient: mockedRDS })
-);
+let rdsAdapterUnderTest = sandbox.spy(new RDSAdapter(test_vars.TEST_LOGGER));
 
 describe(`Basic Start/Stop RDS`, () => {
   beforeEach(() => {});
@@ -31,7 +29,9 @@ describe(`Basic Start/Stop RDS`, () => {
         callback(null, {});
       }
     );
-    const res = await rdsSuspenderUnderTest.stopCluster(TEST_RDS_CLUSTER_ID);
+    const res = await rdsAdapterUnderTest.stopCluster(
+      test_vars.TEST_RDS_CLUSTER_ID
+    );
 
     res.should.equal(true);
 
@@ -46,19 +46,12 @@ describe(`Basic Start/Stop RDS`, () => {
         callback(null, {});
       }
     );
-    const res = await rdsSuspenderUnderTest.startCluster(TEST_RDS_CLUSTER_ID);
+    const res = await rdsAdapterUnderTest.startCluster(
+      test_vars.TEST_RDS_CLUSTER_ID
+    );
 
     res.should.equal(true);
 
     AWSMock.restore("RDS");
-  });
-});
-
-describe(`Stop cluster use cases`, () => {
-  it(`Snapshot complete should stop the cluster if we're out of business hours and no clients are connected`, async () => {
-    const res = await rdsSuspenderUnderTest.requestClusterStop(
-      TEST_RDS_CLUSTER_ID
-    );
-    res.should.equal(true);
   });
 });
