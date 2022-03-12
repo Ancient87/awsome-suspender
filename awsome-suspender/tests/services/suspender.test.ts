@@ -1,18 +1,15 @@
-import * as AWS from "aws-sdk";
-import * as AWSMock from "aws-sdk-mock";
 import * as sinon from "sinon";
 import * as sinonChai from "sinon-chai";
 import * as chai from "chai";
-import * as chaiAsPromised from "chai-as-promised";
 import { RDSAdapter } from "../../src-ts/adapters/rdsadapter";
 import { ECSAdapter } from "../../src-ts/adapters/ecsadapter";
-import {
-  Suspender,
-  TimeBasedECSTarget,
-  TimeOfDay,
-} from "../../src-ts/services/suspender";
+import { Suspender } from "../../src-ts/services/suspender";
 import * as test_vars from "../test_vars";
 import { CloudwatchAdapter } from "../../src-ts/adapters/cloudwatchadapter";
+import {
+  RDSConditionBasedTarget,
+  TimeBasedECSTarget,
+} from "../../src-ts/domain/targets";
 
 chai.should();
 
@@ -26,13 +23,20 @@ const fakeCWAdapter = sandbox.stub(
   new CloudwatchAdapter(test_vars.TEST_LOGGER)
 );
 
-const testTimeBasedTarget = sandbox.stub(
-  new TimeBasedECSTarget({
-    startOfOperatingHours: new TimeOfDay(8, 30),
-    endOfOperatingHours: new TimeOfDay(22, 0),
-    scaledCount: 1,
-    scaledDownCount: 0,
-    resourceId: test_vars.TEST_SERVICE_ID,
+const timeBasedECSTarget = new TimeBasedECSTarget({
+  startOfOperatingHours: test_vars.startOfOperatingHours,
+  endOfOperatingHours: test_vars.endOfOperatingHours,
+  scaledCount: 1,
+  scaledDownCount: 0,
+  resourceId: test_vars.TEST_SERVICE_ID,
+});
+
+const testTimeBasedTarget = sandbox.stub(timeBasedECSTarget);
+
+const testConditionBasedTarget = sandbox.stub(
+  new RDSConditionBasedTarget({
+    ...timeBasedECSTarget,
+    conditions: [],
   })
 );
 
@@ -45,7 +49,7 @@ let suspenderUnderTest = sandbox.spy(
   })
 );
 
-describe(`TimeBased shutdown`, async () => {
+describe(`TimeBased scaling`, async () => {
   afterEach(() => {
     sandbox.reset();
   });
@@ -66,5 +70,28 @@ describe(`TimeBased shutdown`, async () => {
       test_vars.TEST_SERVICE_ID,
       testTimeBasedTarget.scaledCount
     );
+  });
+});
+
+describe(`EventBased scaling`, async () => {
+  afterEach(() => {
+    sandbox.reset();
+  });
+
+  it(`Should scale down if there are no clients connected and its out of business hours`, async () => {
+    await suspenderUnderTest.scaleRDSBasedOnCondition(testConditionBasedTarget);
+    fakeRDSAdapter.stopCluster.should.be.calledOnceWith(
+      test_vars.TEST_RDS_CLUSTER_ID
+    );
+  });
+
+  it(`Should not scale down if there are are clients connected`, async () => {
+    await suspenderUnderTest.scaleRDSBasedOnCondition(testConditionBasedTarget);
+    fakeRDSAdapter.stopCluster.should.have.not.been.called;
+  });
+
+  it(`Should not scale down if its in business hours`, async () => {
+    await suspenderUnderTest.scaleRDSBasedOnCondition(testConditionBasedTarget);
+    fakeRDSAdapter.stopCluster.should.have.not.been.called;
   });
 });

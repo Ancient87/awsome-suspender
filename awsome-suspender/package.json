@@ -4,7 +4,7 @@
   "description": "Pragmatic event driven saving on AWS infra outside of business hours",
   "main": "index.js",
   "scripts": {
-    "test": "env-cmd -f .env.test mocha --inspect=0.0.0.0:8080 --watch --extensions ts --watch-files src-ts,tests -r ts-node/register 'tests/**/*.ts' --watch",
+    "test": "env-cmd -f .env.test mocha --inspect=0.0.0.0:8080 --watch --extensions ts --watch-files src-ts,tests -r ts-node/register 'tests/**/*.test.ts' --watch",
     "coverage": "nyc --reporter=text --reporter=html env-cmd -f .env.test mocha -r ts-node/register 'tests/**/*.ts'",
     "compile": "tsc",
     "build": "tsc && cp package.json dist/src && cd dist/src && npm install --production",

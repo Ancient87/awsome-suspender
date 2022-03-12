@@ -2,65 +2,11 @@ import winston = require("winston");
 import { CloudwatchAdapter } from "../adapters/cloudwatchadapter";
 import { ECSAdapter } from "../adapters/ecsadapter";
 import { RDSAdapter } from "../adapters/rdsadapter";
-
-export class TimeOfDay {
-  hours: number;
-  minutes: number;
-  constructor(hours: number, minutes: number) {
-    this.hours = hours;
-    this.minutes = minutes;
-  }
-
-  public toDate() {
-    const date = new Date();
-    date.setHours(this.hours);
-    date.setMinutes(this.minutes);
-    return date;
-  }
-}
-
-export interface TargetProps {
-  resourceId: string;
-  scaledCount: number;
-  scaledDownCount: number;
-}
-
-export class ScaleTarget {
-  public resourceId: string;
-  public scaledCount: number;
-  public scaledDownCount: number;
-  constructor(props: TargetProps) {
-    this.resourceId = props.resourceId;
-    this.scaledCount = props.scaledCount;
-    this.scaledDownCount = props.scaledDownCount;
-  }
-}
-
-export interface TimeBasedTargetProps extends TargetProps {
-  startOfOperatingHours: TimeOfDay;
-  endOfOperatingHours: TimeOfDay;
-}
-
-export class TimeBasedTarget extends ScaleTarget {
-  startOfOperatingHours: TimeOfDay;
-  endOfOperatingHours: TimeOfDay;
-
-  constructor(props: TimeBasedTargetProps) {
-    super(props);
-    this.startOfOperatingHours = props.startOfOperatingHours;
-    this.endOfOperatingHours = props.endOfOperatingHours;
-  }
-
-  public isInOperatingHours(): boolean {
-    const now = new Date();
-    const isInOperatingHours =
-      now >= this.startOfOperatingHours.toDate() &&
-      now <= this.endOfOperatingHours.toDate();
-    return isInOperatingHours;
-  }
-}
-
-export class TimeBasedECSTarget extends TimeBasedTarget {}
+import {
+  TimeBasedTarget,
+  TimeBasedECSTarget,
+  ConditionBasedTarget,
+} from "../domain/targets";
 
 export interface SuspenderProps {
   ecsAdapter: ECSAdapter;
@@ -82,13 +28,26 @@ export class Suspender {
     this.logger = props.logger;
   }
 
+  public async scaleRDSBasedOnCondition(
+    testConditionBasedTarget: ConditionBasedTarget
+  ): Promise<void> {
+    const shouldScaleDown = testConditionBasedTarget.shouldScaleUp();
+    const shouldScaleUp = testConditionBasedTarget.shouldScaleDown();
+
+    if (shouldScaleUp) {
+      await this.rdsAdapter.startCluster(testConditionBasedTarget.resourceId);
+    } else if (shouldScaleDown) {
+      await this.rdsAdapter.stopCluster(testConditionBasedTarget.resourceId);
+    }
+  }
+
   public async scaleECSBasedOnTime(
     timeBasedTarget: TimeBasedECSTarget
   ): Promise<void> {
-    const shouldShutDown = !timeBasedTarget.isInOperatingHours();
+    const shouldScaleDown = !timeBasedTarget.isInOperatingHours();
     const shouldScaleUp = timeBasedTarget.isInOperatingHours();
 
-    if (shouldShutDown) {
+    if (shouldScaleDown) {
       await this.ecsAdpter.scaleServiceTo(
         timeBasedTarget.resourceId,
         timeBasedTarget.scaledDownCount
